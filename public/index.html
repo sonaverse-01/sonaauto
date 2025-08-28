@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>w4 포스팅 콘솔 (로컬)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system; margin: 24px; }
+    h1 { margin: 0 0 12px; }
+    fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+    legend { padding: 0 6px; font-weight: 600; }
+    .row { display: flex; gap: 24px; }
+    .col { flex: 1; min-width: 280px; }
+    .list { max-height: 320px; overflow: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    .actions { display: flex; gap: 12px; align-items: center; }
+    button { padding: 10px 16px; font-weight: 700; border-radius: 10px; border: 1px solid #222; background: #111; color: white; cursor: pointer; }
+    button[disabled] { opacity: 0.6; cursor: not-allowed; }
+    label.cb { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 6px; }
+    label.cb:hover { background: #f6f6f6; }
+    .muted { color: #666; font-size: 12px; }
+    pre { white-space: pre-wrap; background: #0a0a0a; color: #e9e9e9; padding: 12px; border-radius: 10px; max-height: 420px; overflow: auto; }
+    .pill { display:inline-block; border:1px solid #ddd; border-radius:999px; padding:2px 8px; font-size:12px; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <h1>🧩 w4 포스팅 콘솔</h1>
+  <p class="muted">시트(JSON)를 기반으로 콘텐츠ID를 불러오고, 체크한 플랫폼만 업로드합니다.</p>
+
+  <div class="row">
+    <div class="col">
+      <fieldset>
+        <legend>1) 플랫폼 선택</legend>
+        <div id="platforms" class="list">불러오는 중…</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>2) 옵션</legend>
+        <label class="cb"><input type="checkbox" id="dryRun" /> Dry run (업로드 없이 렌더/검증만)</label>
+      </fieldset>
+
+      <div class="actions">
+        <button id="runBtn">선택한 플랫폼으로 포스팅</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="col">
+      <fieldset>
+        <legend>3) 콘텐츠 선택 (콘텐츠ID 단위)</legend>
+        <div id="contents" class="list">불러오는 중…</div>
+        <div class="actions" style="margin-top:8px;">
+          <button id="selectAll">전체 선택</button>
+          <button id="clearAll">전체 해제</button>
+        </div>
+        <p class="muted">※ 아무것도 선택하지 않으면 시트의 <b>전체 콘텐츠</b>를 대상으로 합니다.</p>
+      </fieldset>
+    </div>
+  </div>
+
+  <fieldset>
+    <legend>실행 로그</legend>
+    <pre id="log">(여기에 결과 로그가 표시됩니다)</pre>
+  </fieldset>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    async function fetchJSON(url, init) {
+      const res = await fetch(url, init);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function checkbox(id, label, value, name) {
+      const el = document.createElement('label');
+      el.className = 'cb';
+      el.innerHTML = `<input type="checkbox" value="${value}" name="${name}" /> <span>${label}</span>`;
+      el.dataset.value = value;
+      return el;
+    }
+
+    function contentRow(item) {
+      const el = document.createElement('label');
+      el.className = 'cb';
+      const pills = (item.platforms || []).map(p => `<span class="pill">${p}</span>`).join('');
+      const title = item.title ? ` - ${item.title}` : '';
+      el.innerHTML = `<input type="checkbox" value="${item.contentId}" name="contentIds" />
+                      <span><b>${item.contentId}</b>${title}<br/><span class="muted">${pills}</span></span>`;
+      el.dataset.value = item.contentId;
+      return el;
+    }
+
+    async function loadPlatforms() {
+      const box = $('#platforms');
+      box.textContent = '불러오는 중…';
+      const { ok, platforms, error } = await fetchJSON('/api/platforms');
+      if (!ok) throw new Error(error || 'platforms load failed');
+      box.innerHTML = '';
+      for (const p of platforms) {
+        box.appendChild(checkbox('pf-' + p, p, p, 'platforms'));
+      }
+      // 기본: 모두 체크
+      $$('#platforms input[type=checkbox]').forEach(i => i.checked = true);
+    }
+
+    async function loadContents() {
+      const box = $('#contents');
+      box.textContent = '불러오는 중…';
+      const { ok, contents, error } = await fetchJSON('/api/contents');
+      if (!ok) throw new Error(error || 'contents load failed');
+      box.innerHTML = '';
+      for (const c of contents) {
+        box.appendChild(contentRow(c));
+      }
+    }
+
+    async function run() {
+      $('#status').textContent = '실행 중…';
+      $('#runBtn').disabled = true;
+      $('#log').textContent = '(실행 중…)';
+
+      const platforms = $$('#platforms input[type=checkbox]:checked').map(i => i.value);
+      const contentIds = $$('#contents input[type=checkbox]:checked').map(i => i.value);
+      const dryRun = $('#dryRun').checked;
+
+      if (!platforms.length) {
+        $('#status').textContent = '';
+        $('#runBtn').disabled = false;
+        $('#log').textContent = '⚠️ 최소 1개 플랫폼을 선택하세요.';
+        return;
+      }
+
+      try {
+        const payload = { platforms, contentIds, dryRun };
+        const { ok, exitCode, stdout, stderr } = await fetchJSON('/api/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        $('#status').textContent = ok ? '완료' : '실패';
+        const merged = [
+          `ok=${ok} exitCode=${exitCode}`,
+          stderr ? `\n[stderr]\n${stderr}` : '',
+          stdout ? `\n[stdout]\n${stdout}` : ''
+        ].join('\n');
+        $('#log').textContent = merged.trim();
+      } catch (e) {
+        $('#status').textContent = '에러';
+        $('#log').textContent = (e?.message || e || 'failed').toString();
+      } finally {
+        $('#runBtn').disabled = false;
+      }
+    }
+
+    $('#runBtn').addEventListener('click', run);
+    $('#selectAll').addEventListener('click', () => {
+      $$('#contents input[type=checkbox]').forEach(i => i.checked = true);
+    });
+    $('#clearAll').addEventListener('click', () => {
+      $$('#contents input[type=checkbox]').forEach(i => i.checked = false);
+    });
+
+    // 초기 로드
+    (async function init() {
+      try {
+        await loadPlatforms();
+        await loadContents();
+        const health = await fetchJSON('/api/health');
+        if (!health.ok) throw new Error('health failed');
+      } catch (e) {
+        $('#log').textContent = '초기화 실패: ' + (e?.message || e);
+      }
+    })();
+  </script>
+</body>
+</html>
