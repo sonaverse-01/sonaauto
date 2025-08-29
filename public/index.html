@@ -11,7 +11,8 @@
     legend { padding: 0 6px; font-weight: 600; }
     .row { display: flex; gap: 24px; }
     .col { flex: 1; min-width: 280px; }
-    .list { max-height: 320px; overflow: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    .list { overflow: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px; }
+    #contents { height: calc(100vh - 400px); min-height: 300px; }
     .actions { display: flex; gap: 12px; align-items: center; }
     button { padding: 10px 16px; font-weight: 700; border-radius: 10px; border: 1px solid #222; background: #111; color: white; cursor: pointer; }
     button[disabled] { opacity: 0.6; cursor: not-allowed; }
@@ -47,6 +48,7 @@
     <div class="col">
       <fieldset>
         <legend>3) 콘텐츠 선택 (콘텐츠ID 단위)</legend>
+        <input type="text" id="searchBox" placeholder="콘텐츠 ID 또는 제목으로 검색..." style="width: 100%; margin-bottom: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 6px;" />
         <div id="contents" class="list">불러오는 중…</div>
         <div class="actions" style="margin-top:8px;">
           <button id="selectAll">전체 선택</button>
@@ -104,15 +106,32 @@
       $$('#platforms input[type=checkbox]').forEach(i => i.checked = true);
     }
 
+    let allContents = [];
+
     async function loadContents() {
       const box = $('#contents');
       box.textContent = '불러오는 중…';
       const { ok, contents, error } = await fetchJSON('/api/contents');
       if (!ok) throw new Error(error || 'contents load failed');
+      allContents = contents;
+      renderContents(contents);
+    }
+
+    function renderContents(contents) {
+      const box = $('#contents');
       box.innerHTML = '';
       for (const c of contents) {
         box.appendChild(contentRow(c));
       }
+    }
+
+    function filterContents() {
+      const query = $('#searchBox').value.toLowerCase();
+      const filtered = allContents.filter(c => 
+        c.contentId.toLowerCase().includes(query) || 
+        (c.title && c.title.toLowerCase().includes(query))
+      );
+      renderContents(filtered);
     }
 
     async function run() {
@@ -160,6 +179,8 @@
     $('#clearAll').addEventListener('click', () => {
       $$('#contents input[type=checkbox]').forEach(i => i.checked = false);
     });
+
+    $('#searchBox').addEventListener('input', filterContents);
 
     // 초기 로드
     (async function init() {

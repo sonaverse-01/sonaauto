@@ -15,7 +15,14 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(echo $SHEETS_WEB_APP_URL)",
+      "Bash(npm run dev:run:*)",
+      "Bash(npm run dev:mcp:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run:*)",
+      "Bash(wmic process where processid=26700 delete:*)",
+      "Bash(npx playwright:*)"
     ],
     "deny": [],
     "ask": []

@@ -39,6 +39,37 @@ class DummyUploader extends Uploader {
   }
 }
 
-export function getUploaders(selected: Platform[]): Uploader[] {
-  return selected.map((p) => new DummyUploader(p));
+export async function getUploaders(
+  selected: Platform[], 
+  storageStates?: Record<string, string>,
+  platformSettings?: any
+): Promise<Uploader[]> {
+  const uploaders: Uploader[] = [];
+  
+  for (const p of selected) {
+    switch (p) {
+      case 'naver_blog':
+        const { NaverBlogUploader } = await import('./naver_blog.js');
+        const storageStatePath = storageStates?.naver_blog;
+        const blogId = platformSettings?.naver_blog?.blogId;
+        const username = platformSettings?.naver_blog?.username;
+        const password = platformSettings?.naver_blog?.password;
+        
+        console.log('getUploaders에서 naver_blog 생성 시 전달하는 값들:');
+        console.log('- platformSettings:', JSON.stringify(platformSettings, null, 2));
+        console.log('- storageStatePath:', storageStatePath);
+        console.log('- blogId:', blogId);
+        console.log('- username:', username);
+        console.log('- password:', password ? '***' : 'undefined');
+        
+        uploaders.push(new NaverBlogUploader(storageStatePath, blogId, username, password));
+        break;
+      default:
+        // 다른 플랫폼은 아직 더미로 유지
+        uploaders.push(new DummyUploader(p));
+        break;
+    }
+  }
+  
+  return uploaders;
 }

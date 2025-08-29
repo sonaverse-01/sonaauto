@@ -1,9 +1,12 @@
 // src/server/index.ts
 import http from 'node:http';
 import { runWorkflow } from '../w4/orchestrator.js';
-import { CONFIG } from '../config.js';
+import { loadConfig } from '../utils/config-loader.js';
 import type { Platform } from '../types.js';
 import 'dotenv/config';
+
+// config.yaml 파일 로드 (환경변수 치환 포함)
+const CONFIG = loadConfig('./config.yaml');
 
 const PORT = Number(process.env.PORT || 8787);
 
@@ -23,7 +26,7 @@ const HTML = String.raw`<!doctype html>
     margin: 0; 
     padding: 0;
     line-height: 1.6; 
-    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f1f5f9' fill-opacity='0.6'%3E%3Ccircle cx='6' cy='6' r='1'/%3E%3Ccircle cx='18' cy='18' r='1'/%3E%3Ccircle cx='30' cy='6' r='1'/%3E%3Ccircle cx='42' cy='18' r='1'/%3E%3Ccircle cx='54' cy='6' r='1'/%3E%3Ccircle cx='6' cy='30' r='1'/%3E%3Ccircle cx='18' cy='42' r='1'/%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3Ccircle cx='42' cy='42' r='1'/%3E%3Ccircle cx='54' cy='30' r='1'/%3E%3Ccircle cx='6' cy='54' r='1'/%3E%3Ccircle cx='18' cy='6' r='1'/%3E%3Ccircle cx='30' cy='54' r='1'/%3E%3Ccircle cx='42' cy='6' r='1'/%3E%3Ccircle cx='54' cy='54' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), #ffffff;
+    background: #ffffff;
     min-height: 100vh;
   }
   
@@ -34,7 +37,7 @@ const HTML = String.raw`<!doctype html>
   }
   
   .header {
-    background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='grid' width='20' height='20' patternUnits='userSpaceOnUse'%3E%3Cpath d='M 20 0 L 0 0 0 20' fill='none' stroke='%23e2e8f0' stroke-width='0.5'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100' height='100' fill='%23f8fafc'/%3E%3Crect width='100' height='100' fill='url(%23grid)'/%3E%3C/svg%3E"), #f8fafc;
+    background: #f8fafc;
     color: #2d3748;
     padding: 40px 0;
     margin: -24px -24px 32px -24px;
@@ -173,14 +176,15 @@ const HTML = String.raw`<!doctype html>
   }
   
   button.primary { 
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+    background: #4a5568; 
     color: #fff; 
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(74, 85, 104, 0.3);
   }
   
   button.primary:hover {
+    background: #2d3748;
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 6px 16px rgba(74, 85, 104, 0.4);
   }
   
   button.secondary {
@@ -252,7 +256,7 @@ const HTML = String.raw`<!doctype html>
   }
   
   .content-list-header {
-    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    background: #4a5568;
     color: white;
     padding: 20px 24px;
     display: flex;
@@ -282,17 +286,30 @@ const HTML = String.raw`<!doctype html>
   }
   
   .content-items {
-    max-height: 400px;
+    height: calc(100vh - 380px);
+    min-height: 250px;
     overflow-y: auto;
   }
   
   .content-item {
-    padding: 16px 24px;
+    padding: 12px 24px;
     border-bottom: 1px solid #f1f5f9;
     font-family: monospace;
     font-size: 14px;
     color: #4a5568;
     transition: background 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .content-item input[type="checkbox"] {
+    accent-color: #4a5568;
+  }
+
+  .content-item label {
+    cursor: pointer;
+    flex: 1;
   }
   
   .content-item:hover {
@@ -354,6 +371,10 @@ const HTML = String.raw`<!doctype html>
             <h2>플랫폼 선택</h2>
             <div class="platforms-grid">
               <div class="platform-item">
+                <input type="checkbox" id="selectAllPlatforms" />
+                <label for="selectAllPlatforms">🌐 모든 플랫폼 선택</label>
+              </div>
+              <div class="platform-item">
                 <input type="checkbox" name="platforms" value="naver_blog" id="naver_blog" />
                 <label for="naver_blog">Naver Blog</label>
               </div>
@@ -411,6 +432,13 @@ const HTML = String.raw`<!doctype html>
             <h3>콘텐츠 ID 목록</h3>
             <button class="refresh-btn" id="refreshContentBtn">새로고침</button>
           </div>
+          <div style="padding: 12px 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <input type="text" id="searchInput" placeholder="콘텐츠 ID로 검색..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; margin-bottom: 8px;" />
+            <div style="display: flex; gap: 8px; font-size: 12px;">
+              <button type="button" id="selectAllContent" style="padding: 4px 8px; background: #e2e8f0; border: 1px solid #cbd5e0; border-radius: 4px; cursor: pointer;">전체 선택</button>
+              <button type="button" id="clearAllContent" style="padding: 4px 8px; background: #e2e8f0; border: 1px solid #cbd5e0; border-radius: 4px; cursor: pointer;">전체 해제</button>
+            </div>
+          </div>
           <div class="content-items" id="contentList">
             <div class="loading">로딩 중...</div>
           </div>
@@ -428,6 +456,8 @@ const HTML = String.raw`<!doctype html>
   const clearBtn = $('#clearBtn');
   const contentList = $('#contentList');
   const refreshContentBtn = $('#refreshContentBtn');
+
+  let allContentIds = [];
 
   // 콘텐츠 ID 목록 로드 함수
   async function loadContentList() {
@@ -450,12 +480,8 @@ const HTML = String.raw`<!doctype html>
           .slice(0, 50); // 최대 50개만 표시
         
         if (contentIds.length > 0) {
-          contentIds.forEach(id => {
-            const item = document.createElement('div');
-            item.className = 'content-item';
-            item.textContent = id;
-            contentList.appendChild(item);
-          });
+          allContentIds = contentIds;
+          renderContentList(contentIds);
         } else {
           showEmptyState();
         }
@@ -491,6 +517,62 @@ const HTML = String.raw`<!doctype html>
 
   refreshContentBtn.addEventListener('click', loadContentList);
 
+  // 콘텐츠 리스트 렌더링 함수
+  function renderContentList(contentIds) {
+    contentList.innerHTML = '';
+    contentIds.forEach(id => {
+      const item = document.createElement('div');
+      item.className = 'content-item';
+      
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.name = 'contentIds';
+      checkbox.value = id;
+      checkbox.id = 'content_' + id;
+      
+      const label = document.createElement('label');
+      label.textContent = id;
+      label.htmlFor = 'content_' + id;
+      
+      item.appendChild(checkbox);
+      item.appendChild(label);
+      contentList.appendChild(item);
+    });
+  }
+
+  // 검색 기능
+  function filterContentList() {
+    const query = $('#searchInput').value.toLowerCase();
+    const filtered = allContentIds.filter(id => 
+      id.toLowerCase().includes(query)
+    );
+    renderContentList(filtered);
+  }
+
+  // 검색 입력 이벤트 리스너
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'searchInput') {
+      filterContentList();
+    }
+  });
+
+  // 콘텐츠 전체 선택/해제
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'selectAllContent') {
+      document.querySelectorAll('input[name="contentIds"]').forEach(cb => cb.checked = true);
+    } else if (e.target.id === 'clearAllContent') {
+      document.querySelectorAll('input[name="contentIds"]').forEach(cb => cb.checked = false);
+    }
+  });
+
+  // 플랫폼 전체 선택/해제
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'selectAllPlatforms') {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('input[name="platforms"]').forEach(cb => cb.checked = isChecked);
+    }
+  });
+
   // 상태 업데이트 함수 개선
   function updateStatus(message, type = 'running') {
     const statusDiv = $('#status');
@@ -501,12 +583,18 @@ const HTML = String.raw`<!doctype html>
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const platforms = Array.from(document.querySelectorAll('input[name="platforms"]:checked')).map(i=>i.value);
+    const contentIds = Array.from(document.querySelectorAll('input[name="contentIds"]:checked')).map(i=>i.value);
     const dryRun = document.querySelector('#dryRun').checked;
     const limitStr = document.querySelector('#limit').value.trim();
     const limit = limitStr ? Number(limitStr) : undefined;
 
     if (!platforms.length) {
       alert('플랫폼을 하나 이상 선택하세요.');
+      return;
+    }
+
+    if (!contentIds.length) {
+      alert('포스팅할 콘텐츠를 하나 이상 선택하세요.');
       return;
     }
 
@@ -518,7 +606,7 @@ const HTML = String.raw`<!doctype html>
       const res = await fetch('/run', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ platforms, dryRun, limit }),
+        body: JSON.stringify({ platforms, contentIds, dryRun, limit }),
       });
       const txt = await res.text();
       try {
@@ -585,6 +673,7 @@ const server = http.createServer(async (req, res) => {
       let payload: any = {};
       try { payload = JSON.parse(raw || '{}'); } catch {}
       const platforms = Array.isArray(payload.platforms) ? (payload.platforms as Platform[]) : [];
+      const contentIds = Array.isArray(payload.contentIds) ? (payload.contentIds as string[]) : [];
       const dryRun = !!payload.dryRun;
       const limit =
         typeof payload.limit === 'number' && Number.isFinite(payload.limit) && payload.limit > 0
@@ -592,9 +681,44 @@ const server = http.createServer(async (req, res) => {
           : undefined;
 
       if (!platforms.length) return sendJSON(res, 400, { error: 'platforms required' });
+      if (!contentIds.length) return sendJSON(res, 400, { error: 'contentIds required' });
 
-      const result = await runWorkflow(CONFIG, platforms, { dryRun, limit });
-      return sendJSON(res, 200, { ok: true, result });
+      // 서버에서 시트 데이터를 직접 가져옴
+      try {
+        const base = process.env.SHEETS_WEB_APP_URL!;
+        const token = process.env.SHEETS_TOKEN!;
+        if (!base || !token) return sendJSON(res, 500, { ok: false, error: 'missing SHEETS_WEB_APP_URL or SHEETS_TOKEN' });
+
+        const sheetUrl = new URL(base);
+        sheetUrl.searchParams.set('mode', 'rows');
+        sheetUrl.searchParams.set('token', token);
+
+        const sheetResponse = await fetch(sheetUrl.toString());
+        const sheetData = await sheetResponse.json();
+        
+        if (!sheetData.ok) {
+          return sendJSON(res, 500, { ok: false, error: 'Sheet API error: ' + (sheetData.error || 'Unknown error') });
+        }
+
+        // 디버깅: 시트 데이터 확인
+        console.log('=== 서버에서 받은 시트 데이터 ===');
+        console.log('전체 sheetData 구조:');
+        console.log(JSON.stringify(sheetData, null, 2));
+        console.log(`시트 행 수: ${sheetData.list?.length || 0}`);
+        if (sheetData.list?.length > 0) {
+          console.log('첫 번째 행 데이터:');
+          console.log('콘텐츠ID:', sheetData.list[0]['콘텐츠ID']);
+          console.log('플랫폼:', sheetData.list[0]['플랫폼']);
+          console.log('상태:', sheetData.list[0]['상태']);
+          console.log('전체 필드명들:', Object.keys(sheetData.list[0]));
+          console.log('rows 필드 내용:', sheetData.list[0]['rows']);
+        }
+
+        const result = await runWorkflow(CONFIG, platforms, { dryRun, limit, contentIds, sheetData: sheetData.list });
+        return sendJSON(res, 200, { ok: true, result });
+      } catch (e: any) {
+        return sendJSON(res, 500, { ok: false, error: String(e?.message || e) });
+      }
     }
 
     // === 시트 프록시 (네이티브 http 버전) ===

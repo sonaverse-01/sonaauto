@@ -1,13 +1,14 @@
 // src/mcp/server.ts
-// MCP SDK 버전 차이를 흡수하는 안전한 초기화 코드
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-// Stdio 전송층은 index가 아닌 /stdio.js에서 가져와야 합니다.
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import type { Platform } from '../types.js';
 import { runWorkflow } from '../w4/orchestrator.js';
-import { CONFIG } from '../config.js';
+import { loadConfig } from '../utils/config-loader.js';
+import 'dotenv/config';
 
-type JsonSchema = Record<string, unknown>;
+// config.yaml 파일 로드 (환경변수 치환 포함)
+const CONFIG = loadConfig('./config.yaml');
 
 const PLATFORM_ENUM: Platform[] = [
   'naver_blog',
@@ -17,84 +18,58 @@ const PLATFORM_ENUM: Platform[] = [
   'threads',
 ];
 
-const server = new Server(
-  { name: 'w4-mcp', version: '0.1.0' },
-  { capabilities: { tools: {} } },
-);
+const mcpServer = new McpServer({
+  name: 'w4-mcp',
+  version: '0.1.0',
+});
 
-// SDK 버전에 따라 tool 등록 API가 다를 수 있어 래퍼로 통일
-function registerTool(
-  name: string,
-  inputSchema: JsonSchema,
-  handler: (req: any) => Promise<{ content: Array<{ type: 'text'; text: string }> }>,
-) {
-  const s: any = server;
+// w4.list-platforms tool
+mcpServer.registerTool('w4.list-platforms', {
+  description: 'List available platforms',
+  inputSchema: {},
+}, async () => {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(PLATFORM_ENUM),
+      },
+    ],
+  };
+});
 
-  // 1) 신형: addTool({ name, description, inputSchema, handler })
-  if (typeof s.addTool === 'function') {
-    return s.addTool({
-      name,
-      description: name,
-      inputSchema,
-      handler,
-    });
-  }
+// w4.run tool  
+mcpServer.registerTool('w4.run', {
+  description: 'Run workflow for specified platforms',
+  inputSchema: {
+    platforms: z.array(z.enum(['naver_blog', 'tistory', 'cafe24_blog', 'sonaverse_blog', 'threads'])).describe('List of platforms to run'),
+    dryRun: z.boolean().optional().describe('Run in dry-run mode'),
+    limit: z.number().int().min(1).optional().describe('Limit number of items to process'),
+  },
+}, async ({ platforms, dryRun, limit }) => {
+  console.log('MCP에서 runWorkflow 호출 시 전달하는 CONFIG:');
+  console.log('- CONFIG.platformSettings:', JSON.stringify(CONFIG.platformSettings, null, 2));
+  console.log('- CONFIG.storageStates:', CONFIG.storageStates);
+  
+  const result = await runWorkflow(CONFIG, platforms as Platform[], { dryRun, limit });
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(result),
+      },
+    ],
+  };
+});
 
-  // 2) 구형: tool(name, { inputSchema }, handler)
-  if (typeof s.tool === 'function') {
-    return s.tool(name, { inputSchema }, handler);
-  }
-
-  // 3) 다른 구버전: registerTool(...)
-  if (typeof s.registerTool === 'function') {
-    return s.registerTool({ name, description: name, inputSchema }, handler);
-  }
-
-  throw new Error('Unsupported MCP SDK: no known tool registration method');
+// stdio 연결
+async function main() {
+  const transport = new StdioServerTransport();
+  await mcpServer.connect(transport);
+  console.log('W4-MCP server is running...');
 }
 
-// ---- tool: w4.list-platforms
-registerTool(
-  'w4.list-platforms',
-  { type: 'object', properties: {} } as JsonSchema,
-  async () => {
-    return { content: [{ type: 'text', text: JSON.stringify(PLATFORM_ENUM) }] };
-  },
-);
-
-// ---- tool: w4.run
-registerTool(
-  'w4.run',
-  {
-    type: 'object',
-    properties: {
-      platforms: {
-        type: 'array',
-        items: { type: 'string', enum: PLATFORM_ENUM as unknown as string[] },
-      },
-      dryRun: { type: 'boolean' },
-      limit: { type: 'integer', minimum: 1 },
-    },
-    required: ['platforms'],
-    additionalProperties: false,
-  } as JsonSchema,
-  async (req: any) => {
-    const args = (req && req.arguments) || {};
-    const platforms = Array.isArray(args.platforms) ? (args.platforms as Platform[]) : [];
-    const dryRun = !!args.dryRun;
-    const limit =
-      typeof args.limit === 'number' && Number.isFinite(args.limit) && args.limit > 0
-        ? (args.limit as number)
-        : undefined;
-
-    const result = await runWorkflow(CONFIG, platforms, { dryRun, limit });
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-  },
-);
-
-// stdio 연결 (listen 대신 connect 사용)
-const transport = new StdioServerTransport();
-(server as any).connect
-  ? (server as any).connect(transport)
-  : // 혹시 다른 네이밍을 쓰는 구버전 대비
-    (server as any).listen?.(transport);
+main().catch((error) => {
+  console.error('Server error:', error);
+  process.exit(1);
+});

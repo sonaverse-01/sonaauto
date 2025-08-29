@@ -53,12 +53,51 @@ export interface SheetRow {
 export type ContentRow = SheetRow;
 
 export interface Config {
-  /** 시트 원본 JSON 경로 (Array<SheetRow>) */
-  sheetPath: string;
+  /** 구글 시트 웹앱 URL */
+  sheetsWebAppUrl: string;
+  /** 구글 시트 토큰 */
+  sheetsToken: string;
   /** 이미지 루트 디렉토리 (rel_path를 이어 붙임) */
   imageRoot: string;
   /** (선택) 산출물 저장 루트 */
   outputRoot?: string;
+  /** 출력 디렉토리 */
+  outputDir?: string;
+  /** Playwright 로그인 상태 파일 경로들 */
+  storageStates?: Record<string, string>;
+  /** 활성화할 플랫폼들 */
+  platforms?: Platform[];
+  /** 헤드리스 모드 여부 */
+  headless?: boolean;
+  /** 게시 후 대기 시간 (ms) */
+  waitAfterPublishMs?: number;
+  /** 플랫폼별 설정 */
+  platformSettings?: {
+    naver_blog?: {
+      blogId: string;
+      username?: string;
+      password?: string;
+    };
+    tistory?: {
+      blogId: string;
+      username?: string;
+      password?: string;
+    };
+    cafe24_blog?: {
+      blogId: string;
+      username?: string;
+      password?: string;
+    };
+    sonaverse_blog?: {
+      blogId: string;
+      username?: string;
+      password?: string;
+    };
+    threads?: {
+      username?: string;
+      password?: string;
+    };
+  };
 }
 
 export interface RenderResult {
@@ -69,4 +108,6 @@ export interface RenderResult {
 export interface RunOptions {
   dryRun?: boolean;
   limit?: number;
+  contentIds?: string[];
+  sheetData?: SheetRow[];
 }

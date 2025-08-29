@@ -1,0 +1,43 @@
+# W4-MCP 설정
+imageRoot: "C:/n8n/data"  # 환경 변수에서 가져온 이미지 루트
+outputDir: "./out"        # 렌더된 HTML/로그 저장
+storageStates:            # Playwright 로그인 상태 파일
+  naver_blog: ".auth/naver.json"
+  tistory: ".auth/tistory.json"
+  cafe24_blog: ".auth/cafe24.json"
+  sonaverse_blog: ".auth/sonaverse.json"
+  threads: ".auth/threads.json"
+platforms:                # 업로드 타겟 플랫폼들
+  - naver_blog
+  - tistory
+  - cafe24_blog
+  - sonaverse_blog
+  - threads
+headless: false           # false로 설정하여 브라우저 창을 보면서 디버깅
+waitAfterPublishMs: 2000  # 게시 후 대기 (ms)
+
+# 플랫폼별 설정 (환경변수에서 읽어옴)
+platformSettings:
+  naver_blog:
+    blogId: "${NAVER_BLOG_ID}"
+    username: "${NAVER_USERNAME}"
+    password: "${NAVER_PASSWORD}"
+  tistory:
+    blogId: "${TISTORY_BLOG_ID}"
+    username: "${TISTORY_USERNAME}"
+    password: "${TISTORY_PASSWORD}"
+  cafe24_blog:
+    blogId: "${CAFE24_BLOG_ID}"
+    username: "${CAFE24_USERNAME}"
+    password: "${CAFE24_PASSWORD}"
+  sonaverse_blog:
+    blogId: "${SONAVERSE_BLOG_ID}"
+    username: "${SONAVERSE_USERNAME}"
+    password: "${SONAVERSE_PASSWORD}"
+  threads:
+    username: "${THREADS_USERNAME}"
+    password: "${THREADS_PASSWORD}"
+
+# Google Sheets 설정 (환경 변수에서 읽어옴)
+sheetsWebAppUrl: "${SHEETS_WEB_APP_URL}"
+sheetsToken: "${SHEETS_TOKEN}"
